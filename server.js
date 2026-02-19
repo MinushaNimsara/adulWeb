@@ -429,7 +429,11 @@ function adminAuth(req, res, next) {
 
 // --- Admin: login check (POST so password can be in body)
 app.post("/api/admin/login", (req, res) => {
-  const raw = (req.body && req.body.password) || req.body?.adminSecret || "";
+  let body = req.body;
+  if (typeof body === "string") {
+    try { body = JSON.parse(body); } catch { body = {}; }
+  }
+  const raw = (body && body.password) || (body && body.adminSecret) || req.headers.authorization?.replace(/^Bearer\s+/i, "") || "";
   const secret = typeof raw === "string" ? raw.trim() : "";
   if (!secret || secret !== ADMIN_SECRET) return res.status(401).json({ error: "Invalid password" });
   res.json({ ok: true });
