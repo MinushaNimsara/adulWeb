@@ -25,6 +25,13 @@ const ROOT = __dirname;
 app.use(express.static(ROOT));
 app.use("/uploads", express.static(UPLOADS_DIR));
 const HOMEPAGE_HTML = IS_VERCEL ? require("./homepage-html.js") : null;
+const EMBEDDED = IS_VERCEL ? require("./embedded-pages.js") : null;
+function serveEmbedded(name) {
+  return (req, res) => {
+    if (IS_VERCEL && EMBEDDED && EMBEDDED[name]) return res.type("html").send(EMBEDDED[name]);
+    res.sendFile(path.join(ROOT, name + ".html"));
+  };
+}
 app.get("/", (req, res) => {
   if (IS_VERCEL && HOMEPAGE_HTML) return res.type("html").send(HOMEPAGE_HTML);
   res.sendFile(path.join(ROOT, "index.html"));
@@ -33,6 +40,11 @@ app.get("/index.html", (req, res) => {
   if (IS_VERCEL && HOMEPAGE_HTML) return res.type("html").send(HOMEPAGE_HTML);
   res.sendFile(path.join(ROOT, "index.html"));
 });
+app.get("/categories.html", serveEmbedded("categories"));
+app.get("/upload.html", serveEmbedded("upload"));
+app.get("/profile.html", serveEmbedded("profile"));
+app.get("/watch.html", serveEmbedded("watch"));
+app.get("/admin.html", serveEmbedded("admin"));
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
