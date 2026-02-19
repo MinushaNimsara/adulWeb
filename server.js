@@ -22,7 +22,6 @@ const DEFAULT_TELEGRAM_CHAT_ID = "-5247292298";
 app.use(cors());
 app.use(express.json());
 const ROOT = __dirname;
-app.use(express.static(ROOT));
 app.use("/uploads", express.static(UPLOADS_DIR));
 const HOMEPAGE_HTML = IS_VERCEL ? require("./homepage-html.js") : null;
 const EMBEDDED = IS_VERCEL ? require("./embedded-pages.js") : null;
@@ -32,6 +31,7 @@ function serveEmbedded(name) {
     res.sendFile(path.join(ROOT, name + ".html"));
   };
 }
+// Embedded routes MUST come before express.static so Vercel serves styled pages
 app.get("/", (req, res) => {
   if (IS_VERCEL && HOMEPAGE_HTML) return res.type("html").send(HOMEPAGE_HTML);
   res.sendFile(path.join(ROOT, "index.html"));
@@ -45,6 +45,7 @@ app.get("/upload.html", serveEmbedded("upload"));
 app.get("/profile.html", serveEmbedded("profile"));
 app.get("/watch.html", serveEmbedded("watch"));
 app.get("/admin.html", serveEmbedded("admin"));
+app.use(express.static(ROOT));
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
