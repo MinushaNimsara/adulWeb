@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P hub – Videos</title>
+    <style>
+:root{--bg-dark:#0d0d0d;--bg-card:#1a1a1a;--bg-elevated:#252525;--accent:#ff9900;--accent-hover:#ffad33;--text:#e5e5e5;--text-muted:#888;--border:#333}*{box-sizing:border-box}body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;margin:0;padding:0;background:var(--bg-dark);color:var(--text);min-height:100vh}a{color:var(--text);text-decoration:none}a:hover{color:var(--accent)}.main-header{background:var(--bg-dark);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}.main-header .logo a{color:#fff;font-size:1.5rem;font-weight:800}.main-header .logo a:hover{color:var(--accent)}.header-search{display:flex;align-items:center;gap:8px;flex:1;max-width:420px;margin:0 24px}.header-search input{flex:1;background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:8px 14px;color:var(--text);font-size:.95rem}.header-search input::placeholder{color:var(--text-muted)}.header-search input:focus{outline:none;border-color:var(--accent)}.header-search button{background:var(--accent);color:#000;border:none;padding:8px 16px;border-radius:4px;font-weight:600;cursor:pointer}.header-search button:hover{background:var(--accent-hover)}.main-header nav{display:flex;align-items:center;gap:8px}.main-header nav a{color:var(--text-muted);font-size:.9rem;font-weight:500;padding:8px 14px;border-radius:4px}.main-header nav a:hover{color:#fff;background:var(--bg-elevated)}.main-header .btn-upload{background:var(--accent);color:#000;font-weight:700;padding:8px 18px;border-radius:4px}.main-header .btn-upload:hover{background:var(--accent-hover)}.main-content{max-width:1600px;margin:0 auto;padding:24px}.hero{text-align:center;padding:48px 24px;background:linear-gradient(180deg,var(--bg-elevated) 0%,var(--bg-dark) 100%);border-radius:8px;margin-bottom:24px;border:1px solid var(--border)}.hero h1{font-size:2rem;margin:0 0 8px;color:#fff}.hero p{font-size:1rem;color:var(--text-muted);margin:0}.uploaded-videos h2{font-size:1.25rem;margin:0 0 20px;color:#fff;font-weight:600}.pagination{margin-top:28px;display:flex;justify-content:center}.pagination-inner{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.pagination-btn{background:var(--bg-elevated);color:var(--text);padding:10px 18px;border-radius:6px;font-weight:600;border:1px solid var(--border)}.pagination-btn:hover{background:var(--accent);color:#000;border-color:var(--accent)}.pagination-page{color:var(--text-muted);font-size:.95rem}.video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}.video-card{background:var(--bg-card);border-radius:6px;overflow:hidden;border:1px solid var(--border);transition:transform .2s,box-shadow .2s}.video-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.4);border-color:var(--accent)}.video-card-thumb{aspect-ratio:16/9;background:#000;overflow:hidden;position:relative}.video-card-thumb video,.video-card-thumb img{width:100%;height:100%;object-fit:cover}.video-card .video-card-info{padding:12px}.video-card h3{margin:0 0 6px;font-size:.95rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#fff}.video-card-meta{font-size:.8rem;color:var(--text-muted)}#videoList{margin-top:0}.loading-msg{text-align:center;color:var(--text-muted);padding:48px}.main-footer{background:var(--bg-dark);border-top:1px solid var(--border);text-align:center;padding:20px;margin-top:40px;color:var(--text-muted);font-size:.85rem}.animate-in{opacity:0;transform:translateY(12px);animation:animateIn .4s ease forwards}.delay-1{animation-delay:.08s}.delay-2{animation-delay:.16s}.delay-3{animation-delay:.24s}.delay-4{animation-delay:.32s}.delay-5{animation-delay:.4s}@keyframes animateIn{to{opacity:1;transform:translateY(0)}}
+    </style>
+</head>
+<body>
+    <header class="main-header">
+        <div class="logo">
+            <a href="index.html">P hub</a>
+        </div>
+        <form id="searchForm" class="header-search" action="index.html" method="GET">
+            <input type="search" id="searchInput" name="q" placeholder="Search videos & pornstars..." autocomplete="off">
+            <button type="submit" aria-label="Search">Search</button>
+        </form>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="categories.html">Categories</a>
+            <a href="profile.html">Profile</a>
+            <a href="upload.html" class="btn-upload">Upload</a>
+        </nav>
+    </header>
+
+    <main class="main-content">
+        <section class="hero animate-in">
+            <h1>Welcome to P hub</h1>
+            <p>Watch, upload, and share. Like and comment.</p>
+        </section>
+
+        <section class="uploaded-videos animate-in delay-1">
+            <h2 id="sectionTitle">Latest</h2>
+            <div id="videoList" class="video-grid">
+                <p class="loading-msg">Loading videos...</p>
+            </div>
+            <div id="pagination" class="pagination"></div>
+        </section>
+    </main>
+
+    <footer class="main-footer">
+        <p>&copy; <span id="copyrightYear"></span> P hub. All Rights Reserved.</p>
+    </footer>
+    <script>document.getElementById("copyrightYear").textContent = new Date().getFullYear();</script>
+    <script>
+(function(){
+const API = (typeof window !== "undefined" && window.location.origin) || "";
+function getSearchQuery(){const p=new URLSearchParams(window.location.search);return (p.get("q")||"").trim();}
+function getPage(){const p=new URLSearchParams(window.location.search);return Math.max(1,parseInt(p.get("page"),10)||1);}
+function escapeHtml(t){const d=document.createElement("div");d.textContent=t;return d.innerHTML;}
+function buildPageUrl(pg){const p=new URLSearchParams(window.location.search);p.set("page",String(pg));return "index.html?"+p.toString();}
+async function loadUploadedVideos(){
+  const videoList=document.getElementById("videoList"),sectionTitle=document.getElementById("sectionTitle"),searchInput=document.getElementById("searchInput"),paginationEl=document.getElementById("pagination");
+  if(!videoList)return;
+  const query=getSearchQuery(),page=getPage();
+  if(searchInput)searchInput.value=query;
+  if(sectionTitle)sectionTitle.textContent=query?`Search results for "${query}"${page>1?" (Page "+page+")":""}`:"Latest";
+  videoList.innerHTML="<p class='loading-msg'>Loading videos...</p>";
+  if(paginationEl)paginationEl.innerHTML="";
+  const fetchWithTimeout=(url,ms=15000)=>Promise.race([fetch(url),new Promise((_,r)=>setTimeout(()=>r(new Error("Timeout")),ms))]);
+  try{
+    const [ownRes,extRes]=await Promise.all([fetchWithTimeout(query?API+"/api/videos?q="+encodeURIComponent(query):API+"/api/videos"),query?fetchWithTimeout(API+"/api/pornmd?q="+encodeURIComponent(query)+"&page="+page):null]);
+    if(ownRes instanceof Error)throw ownRes;
+    const ownVideos=ownRes.ok?await ownRes.json().catch(()=>[]):[];
+    let extData={videos:[],hasMore:false};
+    if(extRes&&extRes.ok){const j=await extRes.json();extData=j.videos?j:{videos:Array.isArray(j)?j:[],hasMore:false};}
+    const extVideos=extData.videos||[];
+    let allVideos=[...(Array.isArray(ownVideos)&&page===1?ownVideos.map(v=>({...v,isOwn:true})):[]),...extVideos.map(v=>({...v,isOwn:false}))];
+    let showRandomFallback=false;
+    if(allVideos.length===0&&query){
+      const randomRes=await fetchWithTimeout(API+"/api/pornmd/random");
+      const randomData=randomRes.ok?await randomRes.json():{videos:[]};
+      const rv=randomData.videos||[];
+      if(rv.length>0){allVideos=rv.map(v=>({...v,isOwn:false}));showRandomFallback=true;}
+    }
+    videoList.innerHTML="";
+    if(allVideos.length===0){
+      videoList.innerHTML=query?`<p>No videos found for "${escapeHtml(query)}". <a href="index.html">Show all</a></p>`:"<p>No videos yet. <a href='upload.html'>Upload the first one</a>.</p>";
+      return;
+    }
+    if(showRandomFallback&&sectionTitle)sectionTitle.textContent=`No results for "${query}" – showing popular videos`;
+    allVideos.forEach((v,i)=>{
+      const card=document.createElement("a");
+      if(v.isOwn){
+        card.href="watch.html?id="+v.id;
+        const thumbSrc=v.telegramFileId?API+"/api/videos/"+v.id+"/stream":API+"/uploads/"+v.file;
+        card.innerHTML='<div class="video-card-thumb"><video muted preload="metadata" src="'+thumbSrc+'#t=1"></video></div><div class="video-card-info"><h3>'+escapeHtml(v.title)+'</h3><span class="video-card-meta">'+escapeHtml(v.uploaderName||"Unknown")+" • "+(v.views||0)+" views</span></div>";
+      }else{
+        card.href="watch.html?ext="+encodeURIComponent(v.url)+"&title="+encodeURIComponent(v.title||"");
+        const thumb=v.thumb||"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180' fill='%23222'%3E%3Crect width='100%25' height='100%25'/%3E%3C/svg%3E";
+        card.innerHTML='<div class="video-card-thumb"><img src="'+thumb+'" alt="" loading="lazy"></div><div class="video-card-info"><h3>'+escapeHtml(v.title)+'</h3><span class="video-card-meta"></span></div>';
+      }
+      card.className="video-card animate-in delay-"+(Math.min(i%5,4));
+      videoList.appendChild(card);
+    });
+    if(query&&paginationEl&&(page>1||extData.hasMore)){
+      let h='<div class="pagination-inner">';
+      if(page>1){h+='<a href="'+buildPageUrl(1)+'" class="pagination-btn">First</a>';h+='<a href="'+buildPageUrl(page-1)+'" class="pagination-btn">Previous</a>';}
+      h+='<span class="pagination-page">Page '+page+'</span>';
+      if(extData.hasMore)h+='<a href="'+buildPageUrl(page+1)+'" class="pagination-btn">Next</a>';
+      h+='</div>';paginationEl.innerHTML=h;
+    }
+  }catch(e){
+    console.error("Error loading videos:",e);
+    videoList.innerHTML=/vercel\.app/i.test(window.location.hostname||"")?"<p class='loading-msg'>API may be starting up. <a href='javascript:location.reload()'>Refresh</a> in a moment.</p>":"<p class='loading-msg'>Failed to load videos. Make sure the server is running (npm start).</p>";
+  }
+}
+document.addEventListener("DOMContentLoaded",loadUploadedVideos);
+})();
+    </script>
+</body>
+</html>

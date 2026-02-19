@@ -1,0 +1,11 @@
+{
+  "videos": [],
+  "comments": {},
+  "profiles": {},
+  "telegram": {
+    "botToken": "",
+    "chatId": "",
+    "lastUpdateId": 0,
+    "storeMode": "download"
+  }
+}

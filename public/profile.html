@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - P hub</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="main-header">
+        <div class="logo"><a href="index.html">P hub</a></div>
+        <form class="header-search" action="index.html" method="GET">
+            <input type="search" name="q" placeholder="Search videos..." autocomplete="off">
+            <button type="submit" aria-label="Search">Search</button>
+        </form>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="categories.html">Categories</a>
+            <a href="profile.html">Profile</a>
+            <a href="upload.html" class="btn-upload">Upload</a>
+        </nav>
+    </header>
+
+    <main class="profile-page">
+        <div class="profile-hero animate-in">
+            <div class="profile-banner"></div>
+            <div class="profile-card">
+                <div class="profile-avatar-wrap">
+                    <div class="profile-avatar profile-avatar-large">
+                        <span class="avatar-inner" id="profileAvatar">?</span>
+                    </div>
+                </div>
+                <h1 id="profileName" class="profile-name">Loading...</h1>
+                <p id="profileBio" class="profile-bio">—</p>
+            </div>
+        </div>
+        <section class="profile-videos-section animate-in delay-2">
+            <h2>Your videos</h2>
+            <div id="profileVideoGrid" class="video-grid"></div>
+        </section>
+    </main>
+
+    <footer class="main-footer">
+        <p>&copy; <span id="copyrightYear"></span> P hub. All Rights Reserved.</p>
+    </footer>
+    <script>document.getElementById("copyrightYear").textContent = new Date().getFullYear();</script>
+    <script src="js/profile.js"></script>
+</body>
+</html>

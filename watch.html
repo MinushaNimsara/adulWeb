@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch - P hub</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="main-header">
+        <div class="logo"><a href="index.html">P hub</a></div>
+        <form class="header-search" action="index.html" method="GET">
+            <input type="search" name="q" placeholder="Search videos..." autocomplete="off">
+            <button type="submit" aria-label="Search">Search</button>
+        </form>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="categories.html">Categories</a>
+            <a href="profile.html">Profile</a>
+            <a href="upload.html" class="btn-upload">Upload</a>
+        </nav>
+    </header>
+
+    <main class="watch-layout">
+        <div class="watch-main">
+            <div id="ownVideoContainer" class="video-container animate-in">
+                <video id="videoPlayer" controls playsinline>
+                    <source id="videoSource" src="" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+            <div id="externalVideoContainer" class="external-video-wrap animate-in" style="display:none">
+                <div class="video-container">
+                    <iframe id="externalFrame" src="" allowfullscreen allow="autoplay; fullscreen"></iframe>
+                </div>
+                <p class="embed-fallback-msg">If the video doesn't load below (some sites block embedding), use the button to watch on the original site.</p>
+                <a id="openExternalLink" href="#" target="_blank" rel="noopener" class="open-external-btn">Open on original site</a>
+            </div>
+            <div class="video-info animate-in delay-1">
+                <h1 id="videoTitle" class="video-title">Loading...</h1>
+                <div class="video-stats">
+                    <span id="videoViews">0 views</span>
+                    <span class="dot">•</span>
+                    <span id="videoDate">--</span>
+                </div>
+                <div class="action-bar">
+                    <button type="button" id="likeBtn" class="btn btn-like" aria-label="Like">
+                        <span class="icon">👍</span>
+                        <span id="likeCount">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="channelBlock" class="channel-block animate-in delay-2">
+                <a href="profile.html" class="channel-link">
+                    <div class="channel-avatar profile-avatar">
+                        <span class="avatar-inner" id="uploaderAvatar">?</span>
+                    </div>
+                    <div class="channel-info">
+                        <span id="uploaderName" class="channel-name">Channel</span>
+                        <span class="channel-label">Creator</span>
+                    </div>
+                </a>
+            </div>
+
+            <div id="descriptionBox" class="description-box animate-in delay-3">
+                <h3>Description</h3>
+                <p id="videoDescription">No description.</p>
+            </div>
+
+            <section id="commentsSection" class="comments-section animate-in delay-4">
+                <h3><span id="commentsCount">0</span> Comments</h3>
+                <div class="comment-form-wrap">
+                    <div class="comment-avatar profile-avatar comment-avatar-small">
+                        <span class="avatar-inner" id="commentUserAvatar">?</span>
+                    </div>
+                    <form id="commentForm" class="comment-form">
+                        <input type="text" id="commentInput" placeholder="Add a comment..." required>
+                        <button type="submit" class="btn btn-primary">Comment</button>
+                    </form>
+                </div>
+                <div id="commentsList" class="comments-list"></div>
+            </section>
+        </div>
+
+        <aside class="watch-sidebar">
+            <h3 class="sidebar-title">Up next</h3>
+            <div id="suggestedVideos" class="suggested-list"></div>
+        </aside>
+    </main>
+
+    <footer class="main-footer">
+        <p>&copy; <span id="copyrightYear"></span> P hub. All Rights Reserved.</p>
+    </footer>
+    <script>document.getElementById("copyrightYear").textContent = new Date().getFullYear();</script>
+    <script src="js/watch.js"></script>
+</body>
+</html>
