@@ -5,8 +5,11 @@ module.exports = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>P hub – Videos</title>
+<script>!function(){var q=(new URLSearchParams(location.search).get("q")||"").trim();if(q){var s=q.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")||"videos";location.replace("https://www.pornmd.com/search/a/"+encodeURIComponent(s))}}();</script>
 <style>
 :root{--bg-dark:#0d0d0d;--bg-card:#1a1a1a;--bg-elevated:#252525;--accent:#ff9900;--accent-hover:#ffad33;--text:#e5e5e5;--text-muted:#888;--border:#333}*{box-sizing:border-box}body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;margin:0;padding:0;background:var(--bg-dark);color:var(--text);min-height:100vh}a{color:var(--text);text-decoration:none}a:hover{color:var(--accent)}.main-header{background:var(--bg-dark);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}.main-header .logo a{color:#fff;font-size:1.5rem;font-weight:800}.main-header .logo a:hover{color:var(--accent)}.header-search{display:flex;align-items:center;gap:8px;flex:1;max-width:420px;margin:0 24px}.header-search input{flex:1;background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:8px 14px;color:var(--text);font-size:.95rem}.header-search input::placeholder{color:var(--text-muted)}.header-search input:focus{outline:none;border-color:var(--accent)}.header-search button{background:var(--accent);color:#000;border:none;padding:8px 16px;border-radius:4px;font-weight:600;cursor:pointer}.header-search button:hover{background:var(--accent-hover)}.main-header nav{display:flex;align-items:center;gap:8px}.main-header nav a{color:var(--text-muted);font-size:.9rem;font-weight:500;padding:8px 14px;border-radius:4px}.main-header nav a:hover{color:#fff;background:var(--bg-elevated)}.main-header .btn-upload{background:var(--accent);color:#000;font-weight:700;padding:8px 18px;border-radius:4px}.main-header .btn-upload:hover{background:var(--accent-hover)}.main-content{max-width:1600px;margin:0 auto;padding:24px}.hero{text-align:center;padding:48px 24px;background:linear-gradient(180deg,var(--bg-elevated) 0%,var(--bg-dark) 100%);border-radius:8px;margin-bottom:24px;border:1px solid var(--border)}.hero h1{font-size:2rem;margin:0 0 8px;color:#fff}.hero p{font-size:1rem;color:var(--text-muted);margin:0}.uploaded-videos h2{font-size:1.25rem;margin:0 0 20px;color:#fff;font-weight:600}.pagination{margin-top:28px;display:flex;justify-content:center}.pagination-inner{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.pagination-btn{background:var(--bg-elevated);color:var(--text);padding:10px 18px;border-radius:6px;font-weight:600;border:1px solid var(--border)}.pagination-btn:hover{background:var(--accent);color:#000;border-color:var(--accent)}.pagination-page{color:var(--text-muted);font-size:.95rem}.video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}.video-card{background:var(--bg-card);border-radius:6px;overflow:hidden;border:1px solid var(--border);transition:transform .2s,box-shadow .2s}.video-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.4);border-color:var(--accent)}.video-card-thumb{aspect-ratio:16/9;background:#000;overflow:hidden;position:relative}.video-card-thumb video,.video-card-thumb img{width:100%;height:100%;object-fit:cover}.video-card .video-card-info{padding:12px}.video-card h3{margin:0 0 6px;font-size:.95rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#fff}.video-card-meta{font-size:.8rem;color:var(--text-muted)}#videoList{margin-top:0}.loading-msg{text-align:center;color:var(--text-muted);padding:48px}.main-footer{background:var(--bg-dark);border-top:1px solid var(--border);text-align:center;padding:20px;margin-top:40px;color:var(--text-muted);font-size:.85rem}.animate-in{opacity:0;transform:translateY(12px);animation:animateIn .4s ease forwards}.delay-1{animation-delay:.08s}.delay-2{animation-delay:.16s}.delay-3{animation-delay:.24s}.delay-4{animation-delay:.32s}.delay-5{animation-delay:.4s}@keyframes animateIn{to{opacity:1;transform:translateY(0)}}
+@media(max-width:768px){.main-header{flex-wrap:wrap;padding:12px 16px;height:auto}.header-search{order:3;flex:1 1 100%;max-width:100%;margin:12px 0 0}.main-content{padding:16px}.hero{padding:24px 16px}.hero h1{font-size:1.5rem}.video-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}}
+@media(max-width:480px){.video-grid{grid-template-columns:1fr}}.no-results-box{text-align:center;padding:40px 24px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)}.btn{display:inline-flex;align-items:center;padding:10px 18px;border-radius:6px;font-weight:600;text-decoration:none;border:none;cursor:pointer}.btn-primary{background:var(--accent);color:#000}.btn-primary:hover{background:var(--accent-hover)}
 </style>
 </head>
 <body>
@@ -16,13 +19,15 @@ module.exports = `<!DOCTYPE html>
 <input type="search" id="searchInput" name="q" placeholder="Search videos & pornstars..." autocomplete="off">
 <button type="submit" aria-label="Search">Search</button>
 </form>
+<script>(function(){var f=document.getElementById("searchForm");if(f)f.addEventListener("submit",function(e){var q=(document.getElementById("searchInput")||{}).value;if((q=q?String(q).trim():"")){e.preventDefault();var s=q.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")||"videos";location.href="https://www.pornmd.com/search/a/"+encodeURIComponent(s)}});})();</script>
 <nav>
 <a href="index.html">Home</a>
 <a href="categories.html">Categories</a>
-<a href="profile.html">Profile</a>
+<span id="navAuth"><a href="login.html">Login</a><a href="signup.html">Sign up</a></span>
 <a href="upload.html" class="btn-upload">Upload</a>
 </nav>
 </header>
+<script>(function(){const API=window.location.origin;const KEY="phub_token";const tok=localStorage.getItem(KEY);const nav=document.getElementById("navAuth");if(!nav)return;function setLoggedOut(){nav.innerHTML='<a href="login.html">Login</a><a href="signup.html">Sign up</a>';}function setLoggedIn(){nav.innerHTML='<a href="profile.html">Profile</a><a href="#" id="logoutBtn">Logout</a>';document.getElementById("logoutBtn")?.addEventListener("click",e=>{e.preventDefault();localStorage.removeItem(KEY);location.reload();});}if(!tok){setLoggedOut();return}fetch(API+"/api/auth/me",{headers:{"Authorization":"Bearer "+tok}}).then(r=>{if(r.ok){setLoggedIn();}else{localStorage.removeItem(KEY);setLoggedOut();}}).catch(()=>{localStorage.removeItem(KEY);setLoggedOut();});})();</script>
 <main class="main-content">
 <section class="hero animate-in">
 <h1>Welcome to P hub</h1>
@@ -73,7 +78,8 @@ async function loadUploadedVideos(){
     }
     videoList.innerHTML="";
     if(allVideos.length===0){
-      videoList.innerHTML=query?\`<p>No videos found for "\${escapeHtml(query)}". <a href="index.html">Show all</a></p>\`:"<p>No videos yet. <a href='upload.html'>Upload the first one</a>.</p>";
+      if(query){var slug=String(query).toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")||"videos";location.replace("https://www.pornmd.com/search/a/"+encodeURIComponent(slug));return;}
+      videoList.innerHTML="<p>No videos yet. <a href='upload.html'>Upload the first one</a>.</p>";
       return;
     }
     if(showRandomFallback&&sectionTitle)sectionTitle.textContent=\`No results for "\${query}" – showing popular videos\`;

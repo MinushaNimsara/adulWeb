@@ -557,3 +557,82 @@ body:has(.main-header) .uploaded-videos h2 { color: #fff; }
 .upload-video label { color: var(--text); }
 .upload-video input { background: var(--bg-dark); color: var(--text); border-color: var(--border); }
 video { width: 100%; border-radius: 4px; }
+
+/* ========== Responsive: Mobile & Tablet ========== */
+@media (max-width: 768px) {
+    .main-header {
+        flex-wrap: wrap;
+        padding: 12px 16px;
+        min-height: 56px;
+        height: auto;
+    }
+    .main-header .logo a { font-size: 1.25rem; }
+    .header-search {
+        order: 3;
+        flex: 1 1 100%;
+        max-width: 100%;
+        margin: 12px 0 0 0;
+    }
+    .main-header nav {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .main-header nav a {
+        padding: 10px 12px;
+        font-size: 0.85rem;
+    }
+    .main-content { padding: 16px; }
+    .hero {
+        padding: 24px 16px;
+    }
+    .hero h1 { font-size: 1.5rem; }
+    .hero p { font-size: 0.9rem; }
+    .video-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+    }
+    .video-card .video-card-info { padding: 10px; }
+    .video-card h3 { font-size: 0.88rem; }
+    .watch-layout {
+        padding: 16px;
+        gap: 16px;
+    }
+    .video-container iframe { min-height: 220px; }
+    .suggested-thumb {
+        width: 120px;
+        height: 68px;
+    }
+    .profile-card {
+        margin-left: 16px;
+        padding: 20px 16px;
+    }
+    .profile-banner { height: 140px; }
+    .upload-page,
+    .profile-page { padding: 16px; }
+    .categories-section h2 { font-size: 1.1rem; }
+    .category-tags a {
+        padding: 10px 14px;
+        font-size: 0.9rem;
+    }
+    .comment-form input { min-width: 100%; }
+}
+
+@media (max-width: 480px) {
+    .video-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    .action-bar .btn { padding: 12px 16px; }
+    .channel-block { flex-direction: column; align-items: flex-start; }
+}
+
+/* Touch-friendly tap targets (min 44px) */
+.main-header nav a,
+.btn,
+.pagination-btn,
+.category-tags a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}

@@ -69,7 +69,7 @@ async function loadStats() {
 async function loadTelegram() {
   try {
     const t = await api("/api/admin/telegram");
-    document.getElementById("tgChatId").value = t.chatId || "-5247292298";
+    document.getElementById("tgChatId").value = t.chatId || "5247292298";
     document.getElementById("tgStoreMode").value = t.storeMode || "download";
     document.getElementById("tgBotToken").value = "";
     document.getElementById("tgBotToken").placeholder = t.connected ? "Token saved — enter new token to change" : "Bot Token (from @BotFather)";

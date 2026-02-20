@@ -4,11 +4,24 @@ const path = require("path");
 const fs = require("fs");
 const https = require("https");
 const http = require("http");
+const crypto = require("crypto");
 const multer = require("multer");
 const cors = require("cors");
 const cheerio = require("cheerio");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 let puppeteer;
-try { puppeteer = require("puppeteer"); } catch { puppeteer = null; }
+let puppeteerCore;
+try {
+  puppeteerCore = require("puppeteer-core");
+} catch {
+  puppeteerCore = null;
+}
+try {
+  puppeteer = require("puppeteer");
+} catch {
+  puppeteer = puppeteerCore;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,18 +29,26 @@ const IS_VERCEL = !!process.env.VERCEL;
 const UPLOADS_DIR = IS_VERCEL ? "/tmp/uploads" : path.join(__dirname, "uploads");
 const DATA_FILE = IS_VERCEL ? "/tmp/data.json" : path.join(__dirname, "data.json");
 const ADMIN_SECRET = (process.env.ADMIN_SECRET || "admin123").trim() || "admin123";
+const JWT_SECRET = (process.env.JWT_SECRET || "phub-jwt-secret-change-in-production").trim();
 // Your Telegram group – hardcoded; you only need to set Bot Token and click Sync
-const DEFAULT_TELEGRAM_CHAT_ID = "-5247292298";
+const DEFAULT_TELEGRAM_CHAT_ID = "5247292298";
 
 app.use(cors());
 app.use(express.json());
+
+// Prevent caching of API responses - ensures mobile and laptop get fresh data (fixes stale/empty cached responses)
+app.use("/api/", (req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.set("Pragma", "no-cache");
+  next();
+});
 const ROOT = __dirname;
 app.use("/uploads", express.static(UPLOADS_DIR));
 const HOMEPAGE_HTML = IS_VERCEL ? require("./homepage-html.js") : null;
-const EMBEDDED = IS_VERCEL ? require("./embedded-pages.js") : null;
+const EMBEDDED = require("./embedded-pages.js");
 function serveEmbedded(name) {
   return (req, res) => {
-    if (IS_VERCEL && EMBEDDED && EMBEDDED[name]) return res.type("html").send(EMBEDDED[name]);
+    if (EMBEDDED && EMBEDDED[name]) return res.type("html").send(EMBEDDED[name]);
     res.sendFile(path.join(ROOT, name + ".html"));
   };
 }
@@ -45,11 +66,14 @@ app.get("/upload.html", serveEmbedded("upload"));
 app.get("/profile.html", serveEmbedded("profile"));
 app.get("/watch.html", serveEmbedded("watch"));
 app.get("/admin.html", serveEmbedded("admin"));
+app.get("/login.html", serveEmbedded("login"));
+app.get("/signup.html", serveEmbedded("signup"));
 app.use(express.static(ROOT));
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 function loadData() {
+  const defaultData = () => ({ videos: [], comments: {}, profiles: {}, telegram: { botToken: "", chatId: DEFAULT_TELEGRAM_CHAT_ID, lastUpdateId: 0, storeMode: "download" } });
   try {
     const raw = fs.readFileSync(DATA_FILE, "utf8");
     const data = JSON.parse(raw);
@@ -57,12 +81,20 @@ function loadData() {
     if (!data.telegram.storeMode) data.telegram.storeMode = "download";
     return data;
   } catch {
-    return { videos: [], comments: {}, profiles: {}, telegram: { botToken: "", chatId: DEFAULT_TELEGRAM_CHAT_ID, lastUpdateId: 0, storeMode: "download" } };
+    return defaultData();
   }
 }
 
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+// Bot token: from saved data, or from TELEGRAM_BOT_TOKEN env (secure, for Vercel)
+function getBotToken(data) {
+  const fromData = data?.telegram?.botToken?.trim();
+  if (fromData) return fromData;
+  const fromEnv = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+  return fromEnv || "";
 }
 
 const storage = multer.diskStorage({
@@ -71,32 +103,134 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Get current user (demo: first profile or default)
-function getCurrentUser() {
+// Get current user: from JWT (req.user) or fallback to first/demo profile
+function getCurrentUser(req) {
+  if (req && req.user) return req.user;
   const data = loadData();
-  const ids = Object.keys(data.profiles);
-  if (ids.length) return data.profiles[ids[0]];
+  const ids = Object.keys(data.profiles || {});
+  if (ids.length) return sanitizeProfile(data.profiles[ids[0]]);
   const defaultId = "user1";
+  data.profiles = data.profiles || {};
   data.profiles[defaultId] = {
     id: defaultId,
     name: "Demo User",
     avatar: null,
     bio: "Welcome to my channel!",
+    email: null,
   };
   saveData(data);
-  return data.profiles[defaultId];
+  return sanitizeProfile(data.profiles[defaultId]);
 }
+
+// Strip sensitive fields before sending to client
+function sanitizeProfile(p) {
+  if (!p) return null;
+  const { passwordHash, ...safe } = p;
+  return safe;
+}
+
+// User auth: require valid JWT
+function userAuth(req, res, next) {
+  const raw = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+  if (!raw) return res.status(401).json({ error: "Login required" });
+  try {
+    const payload = jwt.verify(raw, JWT_SECRET);
+    const data = loadData();
+    const user = (data.profiles || {})[payload.userId];
+    if (!user) return res.status(401).json({ error: "User not found" });
+    req.user = sanitizeProfile(user);
+    next();
+  } catch {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+// Optional auth: set req.user if valid token, else continue
+function optionalUserAuth(req, res, next) {
+  const raw = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+  if (!raw) return next();
+  try {
+    const payload = jwt.verify(raw, JWT_SECRET);
+    const data = loadData();
+    const user = (data.profiles || {})[payload.userId];
+    if (user) req.user = sanitizeProfile(user);
+  } catch {}
+  next();
+}
+
+// --- Auth: signup
+app.post("/api/auth/signup", (req, res) => {
+  let body = req.body;
+  if (typeof body === "string") {
+    try { body = JSON.parse(body); } catch { body = {}; }
+  }
+  const email = (body.email || "").trim().toLowerCase();
+  const password = body.password;
+  const name = (body.name || email.split("@")[0] || "User").trim().slice(0, 50);
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Valid email required" });
+  if (!password || typeof password !== "string" || password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+  const data = loadData();
+  data.profiles = data.profiles || {};
+  const existing = Object.values(data.profiles).find((p) => (p.email || "").toLowerCase() === email);
+  if (existing) return res.status(400).json({ error: "Email already registered" });
+  const id = "u_" + crypto.randomBytes(8).toString("hex");
+  const passwordHash = bcrypt.hashSync(password, 10);
+  const profile = { id, name, email, passwordHash, avatar: null, bio: "" };
+  data.profiles[id] = profile;
+  saveData(data);
+  const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: "7d" });
+  res.status(201).json({ token, user: sanitizeProfile(profile) });
+});
+
+// --- Auth: login
+app.post("/api/auth/login", (req, res) => {
+  let body = req.body;
+  if (typeof body === "string") {
+    try { body = JSON.parse(body); } catch { body = {}; }
+  }
+  const email = (body.email || "").trim().toLowerCase();
+  const password = body.password;
+  if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+  const data = loadData();
+  const user = Object.values(data.profiles || {}).find((p) => (p.email || "").toLowerCase() === email);
+  if (!user || !user.passwordHash) return res.status(401).json({ error: "Invalid email or password" });
+  if (!bcrypt.compareSync(password, user.passwordHash)) return res.status(401).json({ error: "Invalid email or password" });
+  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
+  res.json({ token, user: sanitizeProfile(user) });
+});
+
+// --- Auth: get current user (verify token)
+app.get("/api/auth/me", optionalUserAuth, (req, res) => {
+  if (!req.user) return res.status(401).json({ error: "Not logged in" });
+  res.json(req.user);
+});
 
 // --- API: PornMD proxy - use Puppeteer to render JS and get real search results
 let puppeteerBrowser = null;
+const BROWSERLESS_WS = process.env.BROWSERLESS_WS_URL || process.env.BROWSERLESS_URL;
+
 async function getBrowser() {
-  if (IS_VERCEL || !puppeteer) return null;
+  const pptr = (IS_VERCEL && BROWSERLESS_WS ? puppeteerCore : puppeteer) || puppeteer;
+  if (!pptr) return null;
   if (puppeteerBrowser && puppeteerBrowser.connected) return puppeteerBrowser;
-  puppeteerBrowser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-  });
-  return puppeteerBrowser;
+  try {
+    if (IS_VERCEL && BROWSERLESS_WS) {
+      puppeteerBrowser = await pptr.connect({
+        browserWSEndpoint: BROWSERLESS_WS.startsWith("ws") ? BROWSERLESS_WS : `wss://${BROWSERLESS_WS}`,
+      });
+    } else if (!IS_VERCEL) {
+      puppeteerBrowser = await pptr.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      });
+    } else {
+      return null;
+    }
+    return puppeteerBrowser;
+  } catch (e) {
+    console.error("Browser init error:", e.message);
+    return null;
+  }
 }
 
 const pornmdCache = new Map();
@@ -115,19 +249,33 @@ app.get("/api/pornmd", async (req, res) => {
   if (cached && Date.now() - cached.at < CACHE_MINUTES * 60 * 1000) return res.json(cached.data);
 
   try {
-    if (IS_VERCEL) return res.json({ videos: [], hasMore: false });
     const pageParam = page > 1 ? `&page=${page}` : "";
     const slug = slugify(q) || "videos";
     const url = `https://www.pornmd.com/search/a/${slug}${pageParam ? "?" + pageParam.slice(1) : ""}`;
+    let html;
     const browser = await getBrowser();
-    const browserPage = await browser.newPage();
-    await browserPage.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
-    await browserPage.setViewport({ width: 1280, height: 800 });
-    await browserPage.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
-    await browserPage.waitForSelector("a[href*='/out/']", { timeout: 12000 }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 2000));
-    const html = await browserPage.content();
-    await browserPage.close();
+    if (browser) {
+      try {
+        const browserPage = await browser.newPage();
+        await browserPage.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
+        await browserPage.setViewport({ width: 1280, height: 800 });
+        await browserPage.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
+        await browserPage.waitForSelector("a[href*='/out/']", { timeout: 12000 }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 2000));
+        html = await browserPage.content();
+        await browserPage.close();
+      } catch (e) {
+        console.error("PornMD Puppeteer error:", e.message);
+        return res.json({ videos: [], hasMore: false });
+      }
+    } else {
+      try {
+        html = await fetchHtml(url);
+      } catch (e) {
+        console.error("PornMD fetch error:", e.message);
+        return res.json({ videos: [], hasMore: false });
+      }
+    }
 
     const $ = cheerio.load(html);
     const videos = [];
@@ -169,22 +317,34 @@ app.get("/api/pornmd", async (req, res) => {
 
 // --- API: Random/popular videos (fallback when search has no results)
 app.get("/api/pornmd/random", async (req, res) => {
-  if (IS_VERCEL) return res.json({ videos: [], hasMore: false });
   const cacheKey = "random";
   const cached = pornmdCache.get(cacheKey);
   if (cached && Date.now() - cached.at < CACHE_MINUTES * 60 * 1000) return res.json(cached.data);
 
   try {
     const url = "https://www.pornmd.com/new";
+    let html;
     const browser = await getBrowser();
-    const browserPage = await browser.newPage();
-    await browserPage.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
-    await browserPage.setViewport({ width: 1280, height: 800 });
-    await browserPage.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
-    await browserPage.waitForSelector("a[href*='/out/']", { timeout: 12000 }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 2000));
-    const html = await browserPage.content();
-    await browserPage.close();
+    if (browser) {
+      try {
+        const browserPage = await browser.newPage();
+        await browserPage.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
+        await browserPage.setViewport({ width: 1280, height: 800 });
+        await browserPage.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
+        await browserPage.waitForSelector("a[href*='/out/']", { timeout: 12000 }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 2000));
+        html = await browserPage.content();
+        await browserPage.close();
+      } catch (e) {
+        return res.json({ videos: [], hasMore: false });
+      }
+    } else {
+      try {
+        html = await fetchHtml(url);
+      } catch (e) {
+        return res.json({ videos: [], hasMore: false });
+      }
+    }
 
     const $ = cheerio.load(html);
     const videos = [];
@@ -283,12 +443,12 @@ app.get("/api/videos/:id/stream", async (req, res) => {
   const data = loadData();
   const video = data.videos.find((v) => v.id === req.params.id);
   if (!video) return res.status(404).send("Video not found");
-  if (video.telegramFileId && data.telegram?.botToken) {
+  if (video.telegramFileId && getBotToken(data)) {
     try {
-      const base = `https://api.telegram.org/bot${data.telegram.botToken}`;
+      const base = `https://api.telegram.org/bot${getBotToken(data)}`;
       const fileJson = await httpsGet(`${base}/getFile?file_id=${encodeURIComponent(video.telegramFileId)}`);
       if (!fileJson.ok || !fileJson.result?.file_path) return res.status(502).send("Telegram file unavailable");
-      const streamUrl = `https://api.telegram.org/file/bot${data.telegram.botToken}/${fileJson.result.file_path}`;
+      const streamUrl = `https://api.telegram.org/file/bot${getBotToken(data)}/${fileJson.result.file_path}`;
       return res.redirect(302, streamUrl);
     } catch (e) {
       console.error("Stream from Telegram error:", e);
@@ -325,17 +485,17 @@ app.get("/api/videos/:id/comments", (req, res) => {
   res.json(list);
 });
 
-app.post("/api/videos/:id/comments", (req, res) => {
-  const { text, authorName } = req.body;
+app.post("/api/videos/:id/comments", userAuth, (req, res) => {
+  const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: "Comment text required" });
   const data = loadData();
   const vid = req.params.id;
   if (!data.comments[vid]) data.comments[vid] = [];
-  const user = getCurrentUser();
+  const user = req.user;
   const comment = {
     id: Date.now().toString(),
     text: text.trim(),
-    authorName: authorName || user.name,
+    authorName: user.name,
     authorId: user.id,
     createdAt: new Date().toISOString(),
   };
@@ -345,10 +505,10 @@ app.post("/api/videos/:id/comments", (req, res) => {
 });
 
 // --- API: Upload
-app.post("/api/upload", upload.single("videoFile"), async (req, res) => {
+app.post("/api/upload", userAuth, upload.single("videoFile"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No video file" });
   const title = (req.body.videoTitle || req.file.originalname).trim() || "Untitled";
-  const user = getCurrentUser();
+  const user = req.user;
   const data = loadData();
   const video = {
     id: path.basename(req.file.filename, path.extname(req.file.filename)),
@@ -363,18 +523,18 @@ app.post("/api/upload", upload.single("videoFile"), async (req, res) => {
   };
   data.videos.unshift(video);
   saveData(data);
-  if (data.telegram?.botToken && data.telegram?.chatId) {
+  if (getBotToken(data) && data.telegram?.chatId) {
     const filePath = path.join(UPLOADS_DIR, req.file.filename);
-    sendVideoToTelegramGroup(data.telegram.botToken, data.telegram.chatId, filePath, `[P hub] ${title}`).catch((e) => console.error("Forward to Telegram:", e.message));
+    sendVideoToTelegramGroup(getBotToken(data), data.telegram.chatId, filePath, `[P hub] ${title}`).catch((e) => console.error("Forward to Telegram:", e.message));
   }
   res.status(201).json(video);
 });
 
 // Legacy upload (form multipart)
-app.post("/upload", upload.single("videoFile"), async (req, res) => {
+app.post("/upload", userAuth, upload.single("videoFile"), async (req, res) => {
   if (!req.file) return res.status(400).send("No video file");
   const title = (req.body.videoTitle || req.file.originalname).trim() || "Untitled";
-  const user = getCurrentUser();
+  const user = req.user;
   const data = loadData();
   const video = {
     id: path.basename(req.file.filename, path.extname(req.file.filename)),
@@ -389,9 +549,9 @@ app.post("/upload", upload.single("videoFile"), async (req, res) => {
   };
   data.videos.unshift(video);
   saveData(data);
-  if (data.telegram?.botToken && data.telegram?.chatId) {
+  if (getBotToken(data) && data.telegram?.chatId) {
     const filePath = path.join(UPLOADS_DIR, req.file.filename);
-    sendVideoToTelegramGroup(data.telegram.botToken, data.telegram.chatId, filePath, `[P hub] ${title}`).catch((e) => console.error("Forward to Telegram:", e.message));
+    sendVideoToTelegramGroup(getBotToken(data), data.telegram.chatId, filePath, `[P hub] ${title}`).catch((e) => console.error("Forward to Telegram:", e.message));
   }
   res.send("Video uploaded successfully!");
 });
@@ -408,12 +568,28 @@ app.get("/api/profile/:id", (req, res) => {
   const data = loadData();
   const profile = data.profiles[req.params.id];
   if (!profile) return res.status(404).json({ error: "Profile not found" });
+  const safe = sanitizeProfile(profile);
   const videos = data.videos.filter((v) => v.uploaderId === req.params.id);
-  res.json({ ...profile, videos });
+  res.json({ ...safe, videos });
 });
 
-app.get("/api/profile", (req, res) => {
-  res.json(getCurrentUser());
+app.put("/api/profile", userAuth, (req, res) => {
+  let body = req.body;
+  if (typeof body === "string") {
+    try { body = JSON.parse(body); } catch { body = {}; }
+  }
+  const data = loadData();
+  const profile = data.profiles[req.user.id];
+  if (!profile) return res.status(404).json({ error: "Profile not found" });
+  if (body.name != null) profile.name = String(body.name).trim().slice(0, 50) || profile.name;
+  if (body.bio != null) profile.bio = String(body.bio).trim().slice(0, 500);
+  if (body.avatar != null) profile.avatar = body.avatar === "" || body.avatar === null ? null : String(body.avatar);
+  saveData(data);
+  res.json(sanitizeProfile(profile));
+});
+
+app.get("/api/profile", userAuth, (req, res) => {
+  res.json(req.user);
 });
 
 // --- Admin: auth middleware
@@ -501,10 +677,10 @@ app.delete("/api/admin/comments/:videoId/:commentId", adminAuth, (req, res) => {
 app.get("/api/admin/telegram", adminAuth, (req, res) => {
   const data = loadData();
   res.json({
-    botToken: data.telegram?.botToken ? "***" : "",
+    botToken: getBotToken(data) ? "***" : "",
     chatId: data.telegram?.chatId || DEFAULT_TELEGRAM_CHAT_ID,
     storeMode: data.telegram?.storeMode || "download",
-    connected: !!(data.telegram?.botToken && (data.telegram?.chatId || DEFAULT_TELEGRAM_CHAT_ID)),
+    connected: !!(getBotToken(data) && (data.telegram?.chatId || DEFAULT_TELEGRAM_CHAT_ID)),
   });
 });
 
@@ -518,10 +694,116 @@ app.post("/api/admin/telegram", adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Telegram Webhook: receives updates when videos are posted (auto-import, no auth)
+app.post("/api/telegram-webhook", async (req, res) => {
+  res.status(200).send("OK");
+  const u = req.body;
+  if (!u || typeof u !== "object") return;
+  const data = loadData();
+  const botToken = getBotToken(data);
+  const chatId = data.telegram?.chatId || DEFAULT_TELEGRAM_CHAT_ID;
+  if (!botToken) return;
+  const targetChatId = (chatId.startsWith("-") ? chatId : `-${chatId}`).trim();
+  const targetChatIdNum = Number(targetChatId);
+  const msg = u.message || u.channel_post;
+  if (!msg) return;
+  const msgChatId = msg.chat?.id;
+  const chatMatch = msgChatId !== undefined && (String(msgChatId) === targetChatId || Number(msgChatId) === targetChatIdNum);
+  if (!chatMatch) return;
+  const video = msg.video || msg.video_note || (msg.document && /video\//.test((msg.document.mime_type || "")) ? msg.document : null);
+  if (!video) return;
+  const base = `https://api.telegram.org/bot${botToken}`;
+  const user = getCurrentUser();
+  (async () => {
+    try {
+      const fileJson = await httpsGet(`${base}/getFile?file_id=${encodeURIComponent(video.file_id)}`);
+      if (!fileJson.ok || !fileJson.result?.file_path) return;
+      const filePath = fileJson.result.file_path;
+      const ext = path.extname(filePath) || ".mp4";
+      const title = (msg.caption || msg.document?.file_name || "video").trim().slice(0, 200);
+      const useTelegramOnly = data.telegram?.storeMode === "telegram_only";
+      let videoEntry;
+      if (useTelegramOnly) {
+        videoEntry = {
+          id: "tg_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9),
+          title: title || "From Telegram",
+          file: null,
+          telegramFileId: video.file_id,
+          uploaderId: user.id,
+          uploaderName: user.name,
+          views: 0,
+          likes: 0,
+          description: "Imported from Telegram (auto)",
+          createdAt: new Date().toISOString(),
+          source: "telegram",
+        };
+      } else {
+        const buf = await downloadTelegramFile(botToken, filePath);
+        const filename = Date.now() + ext;
+        fs.writeFileSync(path.join(UPLOADS_DIR, filename), buf);
+        videoEntry = {
+          id: path.basename(filename, ext),
+          title: title || "From Telegram",
+          file: filename,
+          uploaderId: user.id,
+          uploaderName: user.name,
+          views: 0,
+          likes: 0,
+          description: "Imported from Telegram (auto)",
+          createdAt: new Date().toISOString(),
+          source: "telegram",
+        };
+      }
+      data.videos.unshift(videoEntry);
+      saveData(data);
+      console.log("Telegram webhook: added video", videoEntry.title);
+    } catch (e) {
+      console.error("Telegram webhook error:", e);
+    }
+  })();
+});
+
+// --- Admin: Enable Telegram webhook (auto-import when video posted)
+app.post("/api/admin/telegram-webhook-enable", adminAuth, async (req, res) => {
+  const data = loadData();
+  const botToken = getBotToken(data);
+  if (!botToken) return res.status(400).json({ error: "Set Bot Token and Chat ID first." });
+  let baseUrl;
+  if (IS_VERCEL && process.env.VERCEL_URL) {
+    baseUrl = "https://" + process.env.VERCEL_URL.replace(/\/$/, "");
+  } else {
+    const proto = req.headers["x-forwarded-proto"] || "http";
+    const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
+    baseUrl = proto + "://" + host;
+  }
+  const webhookUrl = baseUrl.replace(/\/$/, "") + "/api/telegram-webhook";
+  try {
+    const json = await httpsGet(`https://api.telegram.org/bot${botToken}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
+    if (!json.ok) return res.status(400).json({ error: json.description || "Failed to set webhook" });
+    res.json({ ok: true, webhookUrl });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed" });
+  }
+});
+
+// --- Admin: Disable Telegram webhook (back to manual sync)
+app.post("/api/admin/telegram-webhook-disable", adminAuth, async (req, res) => {
+  const data = loadData();
+  const botToken = getBotToken(data);
+  if (!botToken) return res.status(400).json({ error: "Set Bot Token first." });
+  try {
+    const json = await httpsGet(`https://api.telegram.org/bot${botToken}/deleteWebhook`);
+    if (!json.ok) return res.status(400).json({ error: json.description || "Failed" });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed" });
+  }
+});
+
 // --- Admin: Check what Telegram is sending (to find correct Chat ID)
 app.get("/api/admin/telegram-check", adminAuth, async (req, res) => {
   const data = loadData();
-  const botToken = data.telegram?.botToken;
+  const botToken = getBotToken(data);
   if (!botToken) return res.status(400).json({ error: "Set Bot Token first." });
   const base = `https://api.telegram.org/bot${botToken}`;
   try {
@@ -598,10 +880,31 @@ function httpsGet(url) {
   });
 }
 
+// --- Helper: Fetch HTML page (for PornMD fallback when no Puppeteer)
+function fetchHtml(url, redirectCount = 0) {
+  if (redirectCount > 5) return Promise.reject(new Error("Too many redirects"));
+  return new Promise((resolve, reject) => {
+    const opts = {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+    };
+    https.get(url, opts, (resp) => {
+      if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+        const loc = resp.headers.location;
+        const next = loc.startsWith("http") ? loc : new URL(loc, url).href;
+        return fetchHtml(next, redirectCount + 1).then(resolve).catch(reject);
+      }
+      const chunks = [];
+      resp.on("data", (c) => chunks.push(c));
+      resp.on("end", () => resolve(Buffer.concat(chunks).toString()));
+      resp.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
 // --- Admin: Sync videos from Telegram group
 app.post("/api/admin/telegram-sync", adminAuth, async (req, res) => {
   const data = loadData();
-  const botToken = data.telegram?.botToken;
+  const botToken = getBotToken(data);
   const chatId = data.telegram?.chatId || DEFAULT_TELEGRAM_CHAT_ID;
   if (!botToken) return res.status(400).json({ error: "Set Telegram Bot Token in dashboard first." });
 
