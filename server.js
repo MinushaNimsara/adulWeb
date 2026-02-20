@@ -205,27 +205,54 @@ app.get("/api/auth/me", optionalUserAuth, (req, res) => {
   res.json(req.user);
 });
 
-// --- API: PornMD proxy - use Puppeteer to render JS and get real search results
+// --- API: PornMD proxy - use Browserless Content API (REST)
 let puppeteerBrowser = null;
-const BROWSERLESS_WS = process.env.BROWSERLESS_WS_URL || process.env.BROWSERLESS_URL;
+const BROWSERLESS_WS = (process.env.BROWSERLESS_WS_URL || process.env.BROWSERLESS_URL || "").trim();
+const BROWSERLESS_TOKEN = (process.env.BROWSERLESS_TOKEN || "").trim()
+  || (BROWSERLESS_WS && BROWSERLESS_WS.includes("token=") ? ((BROWSERLESS_WS.match(/token=([^&\s]+)/) || [])[1] || "").trim() : "");
+
+async function fetchRenderedHtml(url) {
+  const token = BROWSERLESS_TOKEN;
+  if (!token) return null;
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      url,
+      gotoOptions: { waitUntil: "networkidle2", timeout: 25000 },
+      waitForSelector: { selector: "a[href*='/out/']", timeout: 15000 },
+      bestAttempt: true,
+    });
+    const req = https.request(
+      `https://production-sfo.browserless.io/content?token=${encodeURIComponent(token)}`,
+      { method: "POST", headers: { "Content-Type": "application/json", "Cache-Control": "no-cache", "Content-Length": Buffer.byteLength(body) } },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const html = Buffer.concat(chunks).toString();
+          if (res.statusCode !== 200) {
+            reject(new Error(`Browserless ${res.statusCode}: ${html.slice(0, 200)}`));
+            return;
+          }
+          resolve(html && html.length > 500 ? html : null);
+        });
+      }
+    );
+    req.on("error", reject);
+    req.setTimeout(45000, () => { req.destroy(); reject(new Error("Timeout")); });
+    req.write(body);
+    req.end();
+  });
+}
 
 async function getBrowser() {
-  const pptr = (IS_VERCEL && BROWSERLESS_WS ? puppeteerCore : puppeteer) || puppeteer;
-  if (!pptr) return null;
+  const pptr = (!IS_VERCEL && puppeteer) ? puppeteer : puppeteerCore;
+  if (!pptr || IS_VERCEL) return null;
   if (puppeteerBrowser && puppeteerBrowser.connected) return puppeteerBrowser;
   try {
-    if (IS_VERCEL && BROWSERLESS_WS) {
-      puppeteerBrowser = await pptr.connect({
-        browserWSEndpoint: BROWSERLESS_WS.startsWith("ws") ? BROWSERLESS_WS : `wss://${BROWSERLESS_WS}`,
-      });
-    } else if (!IS_VERCEL) {
-      puppeteerBrowser = await pptr.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-      });
-    } else {
-      return null;
-    }
+    puppeteerBrowser = await pptr.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    });
     return puppeteerBrowser;
   } catch (e) {
     console.error("Browser init error:", e.message);
@@ -253,27 +280,30 @@ app.get("/api/pornmd", async (req, res) => {
     const slug = slugify(q) || "videos";
     const url = `https://www.pornmd.com/search/a/${slug}${pageParam ? "?" + pageParam.slice(1) : ""}`;
     let html;
-    const browser = await getBrowser();
-    if (browser) {
-      try {
-        const browserPage = await browser.newPage();
-        await browserPage.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
-        await browserPage.setViewport({ width: 1280, height: 800 });
-        await browserPage.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
-        await browserPage.waitForSelector("a[href*='/out/']", { timeout: 12000 }).catch(() => {});
-        await new Promise((r) => setTimeout(r, 2000));
-        html = await browserPage.content();
-        await browserPage.close();
-      } catch (e) {
-        console.error("PornMD Puppeteer error:", e.message);
-        return res.json({ videos: [], hasMore: false });
-      }
-    } else {
-      try {
-        html = await fetchHtml(url);
-      } catch (e) {
-        console.error("PornMD fetch error:", e.message);
-        return res.json({ videos: [], hasMore: false });
+    html = await fetchRenderedHtml(url).catch(() => null);
+    if (!html) {
+      const browser = await getBrowser();
+      if (browser) {
+        try {
+          const browserPage = await browser.newPage();
+          await browserPage.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
+          await browserPage.setViewport({ width: 1280, height: 800 });
+          await browserPage.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+          await browserPage.waitForSelector("a[href*='/out/']", { timeout: 8000 }).catch(() => {});
+          await new Promise((r) => setTimeout(r, 1500));
+          html = await browserPage.content();
+          await browserPage.close();
+        } catch (e) {
+          console.error("PornMD Puppeteer error:", e.message);
+          return res.json({ videos: [], hasMore: false });
+        }
+      } else {
+        try {
+          html = await fetchHtml(url);
+        } catch (e) {
+          console.error("PornMD fetch error:", e.message);
+          return res.json({ videos: [], hasMore: false });
+        }
       }
     }
 
@@ -312,6 +342,36 @@ app.get("/api/pornmd", async (req, res) => {
   } catch (e) {
     console.error("PornMD proxy error:", e);
     res.status(502).json({ error: "Could not fetch PornMD results" });
+  }
+});
+
+// --- Debug: test Browserless integration (visit /api/debug-pornmd to verify)
+app.get("/api/debug-pornmd", async (req, res) => {
+  const hasToken = !!BROWSERLESS_TOKEN;
+  if (!hasToken) {
+    return res.json({
+      ok: false,
+      error: "BROWSERLESS_TOKEN or BROWSERLESS_WS_URL not set in Vercel",
+      hint: "Add BROWSERLESS_TOKEN=your-token in Vercel env vars",
+    });
+  }
+  try {
+    const url = "https://www.pornmd.com/search/a/videos";
+    const html = await fetchRenderedHtml(url);
+    const $ = cheerio.load(html || "");
+    const links = $("a[href*='/out/']").length;
+    res.json({
+      ok: !!html,
+      htmlLength: html ? html.length : 0,
+      videoLinksFound: links,
+      hint: links === 0 ? "PornMD may be blocking automation; try /unblock API" : "Browserless working",
+    });
+  } catch (e) {
+    res.json({
+      ok: false,
+      error: e.message,
+      hint: "Check token in Vercel; ensure no spaces/quotes",
+    });
   }
 });
 
