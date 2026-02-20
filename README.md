@@ -44,6 +44,23 @@ Watch, upload, like, and comment on videos. Connect a **Telegram video group** t
 
 - Copy `data.json.example` to `data.json` if you don't have one yet (the app will create a default on first run if missing).
 
+## Show PornMD search results on your site
+
+By default, search and category results try to fetch videos from PornMD. On **Vercel**, this requires **Browserless** (headless Chrome) because PornMD loads content via JavaScript.
+
+### Enable PornMD results on Vercel
+
+1. Sign up at [browserless.io](https://browserless.io) (free tier available).
+2. Copy your **API token** from the dashboard.
+3. In **Vercel** → your project → **Settings** → **Environment Variables**, add:
+   - **Name:** `BROWSERLESS_WS_URL`
+   - **Value:** `wss://production-sfo.browserless.io?token=YOUR_TOKEN` (replace `YOUR_TOKEN` with your token)
+4. **Redeploy** the project.
+
+After that, when users search (e.g. "tamil", "indian") or click a category, PornMD videos will appear on your page.
+
+---
+
 ## Database and storage
 
 - **Metadata** (videos list, comments, profile, Telegram settings) is stored in **`data.json`** on your PC.
