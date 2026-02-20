@@ -348,11 +348,13 @@ app.get("/api/pornmd", async (req, res) => {
 // --- Debug: test Browserless integration (visit /api/debug-pornmd to verify)
 app.get("/api/debug-pornmd", async (req, res) => {
   const hasToken = !!BROWSERLESS_TOKEN;
+  const projectName = process.env.VERCEL_PROJECT_NAME || process.env.VERCEL_URL?.replace(/\.vercel\.app.*/, "") || "unknown";
   if (!hasToken) {
     return res.json({
       ok: false,
-      error: "BROWSERLESS_TOKEN or BROWSERLESS_WS_URL not set in Vercel",
-      hint: "Add BROWSERLESS_TOKEN=your-token in Vercel env vars",
+      error: "BROWSERLESS_TOKEN or BROWSERLESS_WS_URL not set",
+      project: projectName,
+      hint: `Add BROWSERLESS_TOKEN in Vercel → ${projectName} → Settings → Environment Variables → Save → Redeploy`,
     });
   }
   try {
